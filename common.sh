@@ -20,7 +20,10 @@ nodejs_setup() {
   status_print
 
   echo -e \\e[36m Create App User \\e[0m
-  useradd -r -s /bin/false appuser &>>${log_file}
+  id appuser &>>${log_file}
+  if [ $? -ne 0 ]; then
+    useradd -r -s /bin/false appuser &>>${log_file}
+  fi
   status_print
 
   rm -rf /app
