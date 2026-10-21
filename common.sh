@@ -2,6 +2,7 @@ nodejs_setup() {
   curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
   dnf install -y nodejs
 
+  rm -rf /app
   useradd -r -s /bin/false appuser
   mkdir -p /app
 
