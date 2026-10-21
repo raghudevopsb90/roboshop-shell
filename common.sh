@@ -1,5 +1,15 @@
 log_file=/tmp/roboshop.log
 rm -f $log_file
+
+status_print() {
+  if [ $? -eq 0 ]; then
+    echo SUCCESS
+  else
+    echo FAILURE
+    exit
+  fi
+}
+
 nodejs_setup() {
   echo -e \\e[36m Configure Nodejs Repos \\e[0m
   curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - &>>${log_file}
