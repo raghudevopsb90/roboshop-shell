@@ -3,9 +3,9 @@ rm -f $log_file
 
 status_print() {
   if [ $? -eq 0 ]; then
-    echo SUCCESS
+    echo -e \\e[32m SUCCESS \\e[0m
   else
-    echo FAILURE
+    echo  -e \\e[31m FAILURE \\e[0m
     exit
   fi
 }
