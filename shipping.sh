@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/common.sh"
 # Variables specific to this service
 SERVICE_NAME="shipping"
 SERVICE_PORT="8004"
-APP_DIR="/home/roboshop/shipping"
+APP_DIR="/app"
 DB_HOST="${MYSQL_HOST}"
 DB_USER="shipping"
 DB_PASSWORD="RoboShop@1"
@@ -21,6 +21,9 @@ print_header "Shipping Service Setup"
 
 echo -e "\\e[36mCreating roboshop user\\e[0m"
 create_user || { print_footer 1 $SERVICE_NAME; exit 1; }
+
+echo -e "\\e[36mCreating appuser\\e[0m"
+create_appuser || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 echo -e "\\e[36mInstalling Java 21 and Maven\\e[0m"
 dnf install -y java-21-openjdk java-21-openjdk-devel maven mysql8.4 &>>$LOG_FILE
@@ -58,11 +61,35 @@ fi
 echo $?
 
 echo -e "\\e[36mSetting permissions\\e[0m"
-set_permissions "$APP_DIR" || { print_footer 1 $SERVICE_NAME; exit 1; }
+chown -R appuser:appuser "${APP_DIR}" &>>$LOG_FILE
+chmod o-rwx "${APP_DIR}" -R &>>$LOG_FILE
+echo $?
 
 echo -e "\\e[36mConfiguring and starting service\\e[0m"
-configure_systemd_service_java "${SERVICE_NAME}" "${APP_DIR}/shipping.jar" "${SERVICE_PORT}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+cat > /etc/systemd/system/shipping.service << EOF
+[Unit]
+Description=RoboShop Shipping Service
+After=network.target
 
-start_service "${SERVICE_NAME}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=${APP_DIR}
+ExecStart=/usr/bin/java -jar ${APP_DIR}/shipping.jar
+Restart=on-failure
+RestartSec=10
+SyslogIdentifier=shipping
+
+Environment=DB_HOST=${DB_HOST}
+Environment=DB_USER=${DB_USER}
+Environment=DB_PASS=${DB_PASSWORD}
+Environment=PORT=${SERVICE_PORT}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo $?
+
+start_service "shipping" || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 print_footer 0 $SERVICE_NAME

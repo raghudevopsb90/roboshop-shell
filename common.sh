@@ -123,6 +123,18 @@ create_user() {
     return 0
 }
 
+# Create appuser if not exists (for running services)
+create_appuser() {
+    print_info "Checking if appuser exists"
+    if ! id "appuser" &>/dev/null; then
+        print_info "Creating appuser"
+        useradd -r -s /bin/false appuser &>>$LOG_FILE
+        return $?
+    fi
+    print_info "appuser already exists"
+    return 0
+}
+
 # Set directory permissions
 set_permissions() {
     local dir=$1

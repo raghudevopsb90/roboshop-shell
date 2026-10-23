@@ -21,6 +21,9 @@ print_header "Cart Service Setup"
 echo -e "\\e[36mCreating roboshop user\\e[0m"
 create_user || { print_footer 1 $SERVICE_NAME; exit 1; }
 
+echo -e "\\e[36mCreating appuser\\e[0m"
+create_appuser || { print_footer 1 $SERVICE_NAME; exit 1; }
+
 echo -e "\\e[36mInstalling Node.js 20\\e[0m"
 curl -sL https://rpm.nodesource.com/setup_20.x | bash - &>>$LOG_FILE
 dnf install -y nodejs &>>$LOG_FILE
@@ -42,7 +45,9 @@ npm install --production &>>$LOG_FILE
 echo $?
 
 echo -e "\\e[36mSetting permissions\\e[0m"
-set_permissions "$APP_DIR" || { print_footer 1 $SERVICE_NAME; exit 1; }
+chown -R appuser:appuser "${APP_DIR}" &>>$LOG_FILE
+chmod o-rwx "${APP_DIR}" -R &>>$LOG_FILE
+echo $?
 
 echo -e "\\e[36mCreating run script\\e[0m"
 cat > /home/roboshop/run_cart.sh << EOF
@@ -56,8 +61,26 @@ EOF
 chmod +x /home/roboshop/run_cart.sh
 
 echo -e "\\e[36mConfiguring and starting service\\e[0m"
-configure_systemd_service "${SERVICE_NAME}" "/bin/bash /home/roboshop/run_cart.sh" "${SERVICE_PORT}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+cat > /etc/systemd/system/cart.service << EOF
+[Unit]
+Description=RoboShop Cart Service
+After=network.target
 
-start_service "${SERVICE_NAME}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=${APP_DIR}
+ExecStart=/bin/bash /home/roboshop/run_cart.sh
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo $?
+
+start_service "cart" || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 print_footer 0 $SERVICE_NAME

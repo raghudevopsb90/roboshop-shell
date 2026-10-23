@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/common.sh"
 # Variables specific to this service
 SERVICE_NAME="payment"
 SERVICE_PORT="8005"
-APP_DIR="/home/roboshop/payment"
+APP_DIR="/app"
 AMQP_HOST="${RABBITMQ_HOST}"
 AMQP_USER="${RABBITMQ_USER}"
 AMQP_PASS="${RABBITMQ_PASSWORD}"
@@ -23,6 +23,9 @@ print_header "Payment Service Setup"
 
 echo -e "\\e[36mCreating roboshop user\\e[0m"
 create_user || { print_footer 1 $SERVICE_NAME; exit 1; }
+
+echo -e "\\e[36mCreating appuser\\e[0m"
+create_appuser || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 echo -e "\\e[36mInstalling Python 3\\e[0m"
 dnf install -y python3 python3-pip &>>$LOG_FILE
@@ -44,25 +47,37 @@ pip3 install -r requirements.txt &>>$LOG_FILE
 echo $?
 
 echo -e "\\e[36mSetting permissions\\e[0m"
-set_permissions "$APP_DIR" || { print_footer 1 $SERVICE_NAME; exit 1; }
-
-echo -e "\\e[36mCreating run script\\e[0m"
-cat > /home/roboshop/run_payment.sh << EOF
-#!/bin/bash
-cd ${APP_DIR} || exit 1
-export AMQP_HOST="${AMQP_HOST}"
-export AMQP_USER="${AMQP_USER}"
-export AMQP_PASS="${AMQP_PASS}"
-export CART_URL="${CART_URL}"
-export USER_URL="${USER_URL}"
-export PORT="${SERVICE_PORT}"
-exec /usr/local/bin/uvicorn main:app --host 0.0.0.0 --port ${SERVICE_PORT}
-EOF
-chmod +x /home/roboshop/run_payment.sh
+chown -R appuser:appuser "${APP_DIR}" &>>$LOG_FILE
+chmod o-rwx "${APP_DIR}" -R &>>$LOG_FILE
+echo $?
 
 echo -e "\\e[36mConfiguring and starting service\\e[0m"
-configure_systemd_service_python "${SERVICE_NAME}" "main:app" "${SERVICE_PORT}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+cat > /etc/systemd/system/payment.service << EOF
+[Unit]
+Description=RoboShop Payment Service
+After=network.target
 
-start_service "${SERVICE_NAME}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=${APP_DIR}
+ExecStart=/usr/local/bin/uvicorn main:app --host 0.0.0.0 --port ${SERVICE_PORT}
+Restart=on-failure
+RestartSec=10
+SyslogIdentifier=payment
+
+Environment=AMQP_HOST=${AMQP_HOST}
+Environment=AMQP_USER=${AMQP_USER}
+Environment=AMQP_PASS=${AMQP_PASS}
+Environment=CART_URL=${CART_URL}
+Environment=USER_URL=${USER_URL}
+Environment=PORT=${SERVICE_PORT}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo $?
+
+start_service "payment" || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 print_footer 0 $SERVICE_NAME

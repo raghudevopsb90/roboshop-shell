@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/common.sh"
 # Variables specific to this service
 SERVICE_NAME="orders"
 SERVICE_PORT="8007"
-APP_DIR="/home/roboshop/orders"
+APP_DIR="/app"
 MONGO_URL="mongodb://${MONGODB_HOST}:27017/orders"
 AMQP_HOST="${RABBITMQ_HOST}"
 AMQP_USER="${RABBITMQ_USER}"
@@ -24,6 +24,9 @@ print_header "Orders Service Setup"
 
 echo -e "\\e[36mCreating roboshop user\\e[0m"
 create_user || { print_footer 1 $SERVICE_NAME; exit 1; }
+
+echo -e "\\e[36mCreating appuser\\e[0m"
+create_appuser || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 echo -e "\\e[36mInstalling Java 21\\e[0m"
 dnf install -y java-21-openjdk java-21-openjdk-devel maven &>>$LOG_FILE
@@ -52,11 +55,38 @@ fi
 echo $?
 
 echo -e "\\e[36mSetting permissions\\e[0m"
-set_permissions "$APP_DIR" || { print_footer 1 $SERVICE_NAME; exit 1; }
+chown -R appuser:appuser "${APP_DIR}" &>>$LOG_FILE
+chmod o-rwx "${APP_DIR}" -R &>>$LOG_FILE
+echo $?
 
 echo -e "\\e[36mConfiguring and starting service\\e[0m"
-configure_systemd_service_java "${SERVICE_NAME}" "${APP_DIR}/orders.jar" "${SERVICE_PORT}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+cat > /etc/systemd/system/orders.service << EOF
+[Unit]
+Description=RoboShop Orders Service
+After=network.target
 
-start_service "${SERVICE_NAME}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=${APP_DIR}
+ExecStart=/usr/bin/java -jar ${APP_DIR}/orders.jar
+Restart=on-failure
+RestartSec=10
+SyslogIdentifier=orders
+
+Environment=MONGO_URL=${MONGO_URL}
+Environment=AMQP_HOST=${AMQP_HOST}
+Environment=AMQP_USER=${AMQP_USER}
+Environment=AMQP_PASS=${AMQP_PASS}
+Environment=SHIPPING_URL=${SHIPPING_URL}
+Environment=NOTIFICATION_URL=${NOTIFICATION_URL}
+Environment=PORT=${SERVICE_PORT}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo $?
+
+start_service "orders" || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 print_footer 0 $SERVICE_NAME

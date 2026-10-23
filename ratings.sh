@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/common.sh"
 # Variables specific to this service
 SERVICE_NAME="ratings"
 SERVICE_PORT="8006"
-APP_DIR="/home/roboshop/ratings"
+APP_DIR="/app"
 MYSQL_HOST="${MYSQL_HOST}"
 MYSQL_USER="ratings"
 MYSQL_PASSWORD="RoboShop@1"
@@ -21,6 +21,9 @@ print_header "Ratings Service Setup"
 
 echo -e "\\e[36mCreating roboshop user\\e[0m"
 create_user || { print_footer 1 $SERVICE_NAME; exit 1; }
+
+echo -e "\\e[36mCreating appuser\\e[0m"
+create_appuser || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 echo -e "\\e[36mInstalling Python 3\\e[0m"
 dnf install -y python3 python3-pip mysql8.4 &>>$LOG_FILE
@@ -52,11 +55,36 @@ FLUSH PRIVILEGES;
 echo $?
 
 echo -e "\\e[36mSetting permissions\\e[0m"
-set_permissions "$APP_DIR" || { print_footer 1 $SERVICE_NAME; exit 1; }
+chown -R appuser:appuser "${APP_DIR}" &>>$LOG_FILE
+chmod o-rwx "${APP_DIR}" -R &>>$LOG_FILE
+echo $?
 
 echo -e "\\e[36mConfiguring and starting service\\e[0m"
-configure_systemd_service_gunicorn "${SERVICE_NAME}" "app:app" "${SERVICE_PORT}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+cat > /etc/systemd/system/ratings.service << EOF
+[Unit]
+Description=RoboShop Ratings Service
+After=network.target
 
-start_service "${SERVICE_NAME}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=${APP_DIR}
+ExecStart=/usr/local/bin/gunicorn -b 0.0.0.0:${SERVICE_PORT} app:app
+Restart=on-failure
+RestartSec=10
+SyslogIdentifier=ratings
+
+Environment=MYSQL_HOST=${MYSQL_HOST}
+Environment=MYSQL_USER=${MYSQL_USER}
+Environment=MYSQL_PASSWORD=${MYSQL_PASSWORD}
+Environment=MYSQL_DATABASE=ratings
+Environment=PORT=${SERVICE_PORT}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo $?
+
+start_service "ratings" || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 print_footer 0 $SERVICE_NAME

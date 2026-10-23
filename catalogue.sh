@@ -23,6 +23,9 @@ print_header "Catalogue Service Setup"
 echo -e "\\e[36mCreating roboshop user\\e[0m"
 create_user || { print_footer 1 $SERVICE_NAME; exit 1; }
 
+echo -e "\\e[36mCreating appuser\\e[0m"
+create_appuser || { print_footer 1 $SERVICE_NAME; exit 1; }
+
 echo -e "\\e[36mInstalling dependencies\\e[0m"
 dnf install -y git go mysql8.4 &>>$LOG_FILE
 echo $?
@@ -60,8 +63,9 @@ go build -o "${APP_DIR}/catalogue" . &>>$LOG_FILE
 echo $?
 
 echo -e "\\e[36mSetting permissions\\e[0m"
-set_permissions "$APP_DIR" "appuser" || { print_footer 1 $SERVICE_NAME; exit 1; }
-chmod o-rwx "${APP_DIR}" -R 2>/dev/null || { print_info "chmod completed"; }
+chown -R appuser:appuser "${APP_DIR}" &>>$LOG_FILE
+chmod o-rwx "${APP_DIR}" -R &>>$LOG_FILE
+echo $?
 
 echo -e "\\e[36mConfiguring and starting service\\e[0m"
 cat > /etc/systemd/system/catalogue.service << EOF
