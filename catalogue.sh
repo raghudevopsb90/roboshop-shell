@@ -39,12 +39,16 @@ unzip -o /tmp/catalogue.zip -d "$APP_DIR" &>>$LOG_FILE
 echo $?
 
 echo -e "\\e[36mSetting up database\\e[0m"
-mysql -h "${DB_HOST}" -u root -p${MYSQL_ROOT_PASSWORD} -e "
-CREATE DATABASE IF NOT EXISTS ${DB_NAME};
-CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASSWORD}';
-GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'%';
-FLUSH PRIVILEGES;
-" &>>$LOG_FILE
+echo -e "\\e[36mLoading catalogue database schema\\e[0m"
+mysql -h "${DB_HOST}" -u root -p${MYSQL_ROOT_PASSWORD} < "${APP_DIR}/db/schema.sql" &>>$LOG_FILE
+echo $?
+
+echo -e "\\e[36mLoading catalogue app-user SQL\\e[0m"
+mysql -h "${DB_HOST}" -u root -p${MYSQL_ROOT_PASSWORD} < "${APP_DIR}/db/app-user.sql" &>>$LOG_FILE
+echo $?
+
+echo -e "\\e[36mLoading master data into catalogue database\\e[0m"
+mysql -h "${DB_HOST}" -u root -p${MYSQL_ROOT_PASSWORD} ${DB_NAME} < "${APP_DIR}/db/master-data.sql" &>>$LOG_FILE
 echo $?
 
 echo -e "\\e[36mBuilding catalogue service\\e[0m"
