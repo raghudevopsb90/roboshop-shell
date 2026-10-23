@@ -14,39 +14,37 @@ SERVICE_PORT="8001"
 APP_DIR="/home/roboshop/user"
 MONGODB_HOST="${MONGODB_HOST}"
 JWT_SECRET="roboshop-secret-key"
-REPO_URL="https://github.com/raghudevopsb89/roboshop-microservices/raw/main/artifacts"
+REPO_URL="https://raw.githubusercontent.com/raghudevopsb89/roboshop-microservices/main/artifacts"
 
 print_header "User Service Setup"
 
-# Step 1: Create roboshop user
-print_info "Step 1: Creating roboshop user"
+echo -e "\\e[36mCreating roboshop user\\e[0m"
 create_user || { print_footer 1 $SERVICE_NAME; exit 1; }
 
-# Step 2: Install Node.js
-print_info "Step 2: Installing Node.js 20"
-install_nodejs || { print_footer 1 $SERVICE_NAME; exit 1; }
+echo -e "\\e[36mInstalling Node.js 20\\e[0m"
+curl -sL https://rpm.nodesource.com/setup_20.x | bash - &>>$LOG_FILE
+dnf install -y nodejs &>>$LOG_FILE
+echo $?
 
-# Step 3: Download and install application
-print_info "Step 3: Downloading user service"
+echo -e "\\e[36mDownloading user service\\e[0m"
 mkdir -p "$APP_DIR"
 cd "$APP_DIR" || { print_footer 1 $SERVICE_NAME; exit 1; }
 
-curl -sL "${REPO_URL}/user.zip" -o /tmp/user.zip 2>/dev/null
-if [ -f /tmp/user.zip ]; then
-    unzip -o /tmp/user.zip 2>/dev/null || { print_info "Failed to extract, using existing files"; }
-    rm -f /tmp/user.zip
-fi
+curl -L -o /tmp/user.zip "${REPO_URL}/user.zip" &>>$LOG_FILE
+echo $?
 
-# Install npm dependencies
-print_info "Installing npm dependencies"
-npm install --production 2>/dev/null || { print_info "npm install completed or failed"; }
+echo -e "\\e[36mExtracting user service\\e[0m"
+unzip -o /tmp/user.zip &>>$LOG_FILE
+echo $?
 
-# Step 4: Set permissions
-print_info "Step 4: Setting permissions"
+echo -e "\\e[36mInstalling npm dependencies\\e[0m"
+npm install --production &>>$LOG_FILE
+echo $?
+
+echo -e "\\e[36mSetting permissions\\e[0m"
 set_permissions "$APP_DIR" || { print_footer 1 $SERVICE_NAME; exit 1; }
 
-# Step 5: Create run script
-print_info "Step 5: Creating run script"
+echo -e "\\e[36mCreating run script\\e[0m"
 cat > /home/roboshop/run_user.sh << EOF
 #!/bin/bash
 cd ${APP_DIR} || exit 1
@@ -57,8 +55,7 @@ exec /usr/bin/node server.js
 EOF
 chmod +x /home/roboshop/run_user.sh
 
-# Step 6: Configure and start service
-print_info "Step 6: Configuring and starting service"
+echo -e "\\e[36mConfiguring and starting service\\e[0m"
 configure_systemd_service "${SERVICE_NAME}" "/bin/bash /home/roboshop/run_user.sh" "${SERVICE_PORT}" || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 start_service "${SERVICE_NAME}" || { print_footer 1 $SERVICE_NAME; exit 1; }

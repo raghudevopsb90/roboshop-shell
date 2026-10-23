@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory contains shell scripts for deploying the RoboShop microservices architecture. All scripts are idempotent and follow DRY principles.
+This directory contains shell scripts for deploying the RoboShop microservices architecture. All scripts are idempotent, follow DRY principles, and use log redirection to capture output while only showing exit status.
 
 ## Files Structure
 
@@ -28,6 +28,7 @@ This directory contains shell scripts for deploying the RoboShop microservices a
 - RHEL 10 operating system
 - Internet access for package downloads
 - Appropriate firewall/security group rules
+- DNS records for `rdevopsb90.online` pointing to respective servers
 
 ## Setup Order
 
@@ -126,6 +127,13 @@ Each script can be run with:
 ./script-name.sh
 ```
 
+Each script will:
+1. Print a header showing the service being set up
+2. Execute each step with a colored message
+3. Shows only the exit status (0=success, 1=failure)
+4. Logs full output to `/tmp/roboshop.log`
+5. Print a footer with SUCCESS or FAILURE status
+
 ### For re-runs
 
 All scripts are idempotent and can be re-run without failure:
@@ -133,7 +141,22 @@ All scripts are idempotent and can be re-run without failure:
 - Uses `IF NOT EXISTS` patterns for database operations
 - Gracefully handles already configured services
 
-## troubleshooting
+## Script Output
+
+The scripts use the following pattern for command execution:
+
+```bash
+echo -e "\\e[36mStep Description\\e[0m"
+command &>>$LOG_FILE
+echo $?
+```
+
+Where:
+- `\\e[36m` = Cyan text color (for step description)
+- `&>>$LOG_FILE` = Redirects output to `/tmp/roboshop.log`
+- `echo $?` = Prints exit status (0 for success, non-zero for failure)
+
+## Troubleshooting
 
 ### Check Service Status
 ```bash
@@ -141,23 +164,17 @@ systemctl status <service-name>
 journalctl -u <service-name> -f
 ```
 
-### Restart Service
-```bash
-systemctl restart <service-name>
-```
-
-### Log Files
+### View Logs
 - Application logs: `journalctl -u <service-name> -f`
+- Installation logs: `cat /tmp/roboshop.log`
 - Nginx: `/var/log/nginx/`
 - MySQL: `/var/log/mysql/`
 - MongoDB: `/var/log/mongodb/`
 
-## Next Steps
-
-1. Set up each server with the appropriate services
-2. Configure DNS records for `rdevopsb90.online`
-3. Configure firewall rules to allow necessary ports
-4. Test the application by accessing `http://<FRONTEND-SERVER-PUBLIC-IP>`
+### Restart Service
+```bash
+systemctl restart <service-name>
+```
 
 ## Notes
 
@@ -165,3 +182,5 @@ systemctl restart <service-name>
 - Services are started with systemd
 - DNS resolution must work for all service-to-service communication
 - Passwords are hardcoded for simplicity (can be externalized later)
+- Log files are cleared at the start of each script execution
+- Use colored output for better visibility during execution

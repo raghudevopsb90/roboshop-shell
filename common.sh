@@ -4,6 +4,12 @@
 # RoboShop Common Variables and Functions
 # ============================================================
 
+# Log file configuration
+LOG_FILE="/tmp/roboshop.log"
+
+# Remove old log file for clean log
+rm -f $LOG_FILE
+
 # Global Configuration
 ROBOTSHOP_DOMAIN="rdevopsb90.online"
 APP_USER="roboshop"
@@ -84,14 +90,14 @@ print_footer() {
     fi
 }
 
-# Print info message
+# Print info message with colored output
 print_info() {
-    echo "[INFO] $1"
+    echo -e "\\e[36m$1\\e[0m"
 }
 
 # Print error message and exit
 print_error() {
-    echo "[ERROR] $1"
+    echo -e "\\e[31m[ERROR]\\e[0m $1"
     exit 1
 }
 
@@ -100,7 +106,7 @@ install_packages() {
     local packages=("$@")
     if [ ${#packages[@]} -gt 0 ]; then
         print_info "Installing packages: ${packages[*]}"
-        dnf install -y "${packages[@]}" 2>/dev/null
+        dnf install -y "${packages[@]}" &>>$LOG_FILE
         return $?
     fi
 }
@@ -110,7 +116,7 @@ create_user() {
     print_info "Checking if user ${APP_USER} exists"
     if ! id "$APP_USER" &>/dev/null; then
         print_info "Creating user: ${APP_USER}"
-        useradd -M -s /sbin/nologin "$APP_USER" 2>/dev/null
+        useradd -M -s /sbin/nologin "$APP_USER" &>>$LOG_FILE
         return $?
     fi
     print_info "User ${APP_USER} already exists"
@@ -122,8 +128,8 @@ set_permissions() {
     local dir=$1
     local owner=${2:-$APP_USER}
     print_info "Setting permissions on ${dir} for ${owner}"
-    chown -R "$owner":"$owner" "$dir" 2>/dev/null
-    chmod -R 755 "$dir" 2>/dev/null
+    chown -R "$owner":"$owner" "$dir" &>>$LOG_FILE
+    chmod -R 755 "$dir" &>>$LOG_FILE
     return $?
 }
 
@@ -138,9 +144,9 @@ is_service_running() {
 start_service() {
     local service_name=$1
     print_info "Starting service: ${service_name}"
-    systemctl daemon-reload 2>/dev/null
-    systemctl enable "$service_name" 2>/dev/null
-    systemctl restart "$service_name" 2>/dev/null
+    systemctl daemon-reload &>>$LOG_FILE
+    systemctl enable "$service_name" &>>$LOG_FILE
+    systemctl restart "$service_name" &>>$LOG_FILE
     return $?
 }
 
@@ -148,8 +154,8 @@ start_service() {
 reload_and_restart_service() {
     local service_name=$1
     print_info "Reloading systemd and restarting ${service_name}"
-    systemctl daemon-reload 2>/dev/null
-    systemctl restart "$service_name" 2>/dev/null
+    systemctl daemon-reload &>>$LOG_FILE
+    systemctl restart "$service_name" &>>$LOG_FILE
     return $?
 }
 
@@ -165,7 +171,7 @@ install_nodejs() {
     print_info "Checking Node.js installation"
     if ! command -v node &>/dev/null; then
         print_info "Installing Node.js 20"
-        curl -sL https://rpm.nodesource.com/setup_20.x | bash -
+        curl -sL https://rpm.nodesource.com/setup_20.x | bash - &>>$LOG_FILE
         install_packages nodejs || return $?
     else
         print_info "Node.js already installed"
@@ -302,14 +308,14 @@ download_and_extract() {
     print_info "Downloading ${artifact_name}"
     local zip_file="/tmp/${artifact_name}.zip"
     
-    curl -sL "$url" -o "$zip_file" 2>/dev/null
+    curl -sL "$url" -o "$zip_file" &>>$LOG_FILE
     if [ $? -ne 0 ]; then
         print_error "Failed to download ${artifact_name}"
     fi
     
     print_info "Extracting ${artifact_name} to ${dest_dir}"
     mkdir -p "$dest_dir"
-    unzip -o "$zip_file" -d "$dest_dir" 2>/dev/null
+    unzip -o "$zip_file" -d "$dest_dir" &>>$LOG_FILE
     if [ $? -ne 0 ]; then
         print_error "Failed to extract ${artifact_name}"
     fi
