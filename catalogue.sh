@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/common.sh"
 # Variables specific to this service
 SERVICE_NAME="catalogue"
 SERVICE_PORT="8002"
-APP_DIR="/home/roboshop/catalogue"
+APP_DIR="/app"
 DB_HOST="${MYSQL_HOST}"
 DB_NAME="catalogue"
 DB_USER="catalogue"
@@ -50,30 +50,41 @@ echo $?
 echo -e "\\e[36mBuilding catalogue service\\e[0m"
 cd "$APP_DIR" || { print_footer 1 $SERVICE_NAME; exit 1; }
 
-export CGO_ENABLED=0
 go mod tidy &>>$LOG_FILE
-go build -o "${APP_DIR}/service" ./... &>>$LOG_FILE
+export CGO_ENABLED=0
+go build -o "${APP_DIR}/catalogue" . &>>$LOG_FILE
 echo $?
 
-echo -e "\\e[36mCreating run script\\e[0m"
-cat > /home/roboshop/run_catalogue.sh << EOF
-#!/bin/bash
-cd ${APP_DIR} || exit 1
-export MYSQL_HOST="${DB_HOST}"
-export MYSQL_USER="${DB_USER}"
-export MYSQL_PASSWORD="${DB_PASSWORD}"
-export MYSQL_DATABASE="${DB_NAME}"
-export PORT="${SERVICE_PORT}"
-exec ${APP_DIR}/service
-EOF
-chmod +x /home/roboshop/run_catalogue.sh
-
 echo -e "\\e[36mSetting permissions\\e[0m"
-set_permissions "$APP_DIR" || { print_footer 1 $SERVICE_NAME; exit 1; }
+set_permissions "$APP_DIR" "appuser" || { print_footer 1 $SERVICE_NAME; exit 1; }
+chmod o-rwx "${APP_DIR}" -R 2>/dev/null || { print_info "chmod completed"; }
 
 echo -e "\\e[36mConfiguring and starting service\\e[0m"
-configure_systemd_service "${SERVICE_NAME}" "/bin/bash /home/roboshop/run_catalogue.sh" "${SERVICE_PORT}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+cat > /etc/systemd/system/catalogue.service << EOF
+[Unit]
+Description=RoboShop Catalogue Service
+After=network.target
 
-start_service "${SERVICE_NAME}" || { print_footer 1 $SERVICE_NAME; exit 1; }
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=${APP_DIR}
+ExecStart=${APP_DIR}/catalogue
+Restart=on-failure
+RestartSec=10
+SyslogIdentifier=catalogue
+
+Environment=MYSQL_HOST=${DB_HOST}
+Environment=MYSQL_USER=${DB_USER}
+Environment=MYSQL_PASSWORD=${DB_PASSWORD}
+Environment=MYSQL_DATABASE=${DB_NAME}
+Environment=PORT=${SERVICE_PORT}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo $?
+
+start_service "catalogue" || { print_footer 1 $SERVICE_NAME; exit 1; }
 
 print_footer 0 $SERVICE_NAME
